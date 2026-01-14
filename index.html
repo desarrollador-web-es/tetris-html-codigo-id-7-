@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Tetris Party — Completo con anuncios al perder</title>
-    <meta name="description" content="Tetris extendido con muchas piezas, línea roja, música, guardado de puntuaciones, dificultad, controles táctiles y anuncio al perder." />
+  <meta name="description" content="Tetris extendido con muchas piezas, línea roja, música, guardado de puntuaciones, dificultad, controles táctiles y anuncio al perder." />
   <style>
     :root{
       --cols:10; --rows:20; --cell:26px; --gap:2px;
@@ -109,9 +109,7 @@
         <input id="sfx-vol" type="range" min="0" max="1" step="0.01" value="0.9">
       </div>
 
-      <div style="margin-top:12px" class="small">Controles: ← → mover | ↑ rotar | Z/Q rotar izq | ↓ bajar | Espacio caída | C hold | P pausar | R reiniciar</div>
-
-      <div style="margin-top:14px; text-align:left">
+      <div style="margin-top:12px; text-align:left">
         <strong>Récords</strong>
         <div id="leaderboard" class="leaderboard" aria-live="polite"></div>
         <div style="display:flex; gap:8px; margin-top:8px">
@@ -776,8 +774,8 @@
       // Update UI status
       adStatusEl.textContent = 'Preparando anuncio...';
       gameoverTextEl.textContent = 'Se mostrará un anuncio antes de continuar.';
-      // Attempt to show ad (placeholder function below)
-      showAdOnGameOver({ preferRewarded: true, timeoutMs: 4000 })
+      // Attempt to show ad (real integration below)
+      showAdOnGameOver({ preferRewarded: true, timeoutMs: 5000 })
         .then(result => {
           if (result && result.rewarded) {
             // Reward example: +50 puntos
@@ -799,66 +797,56 @@
         });
     }
 
-    // --- Ad integration placeholder ---
-    // Replace this function with the real SDK integration from your ad provider.
-    // It must return a Promise that resolves {shown:true, rewarded:true/false} or rejects on error/no-fill.
+    // --- Ad integration: dynamic load for Adsterra Zone ID 5532765 ---
+    // This function injects the ad script only when Game Over happens.
+    // Replace the script URL if Adsterra provides a different pl subdomain.
     function showAdOnGameOver({ preferRewarded = false, timeoutMs = 5000 } = {}) {
-      // Simulated behavior for local testing
       return new Promise((resolve, reject) => {
-        // Update UI
         adStatusEl.textContent = 'Solicitando anuncio...';
-        // Simulate network/load time
-        const loadTime = 600 + Math.random() * 900;
+        // If script already loaded, resolve quickly (Adsterra may auto-show on load)
+        if (window.__adsterra_zone_5532765_loaded) {
+          // We assume script already handled impression; resolve as non-rewarded
+          resolve({ shown: true, rewarded: false });
+          return;
+        }
         let settled = false;
-        const timer = setTimeout(() => {
+        // Create script element dynamically so it only loads on Game Over
+        const s = document.createElement('script');
+        // NOTE: many Adsterra snippets use a pl subdomain. If your panel gives a different prefix,
+        // replace 'pl5532765' below with the exact host they provide.
+        s.src = "//pl5532765.adsterra.com/5532765.js";
+        s.async = true;
+        s.onload = () => {
+          window.__adsterra_zone_5532765_loaded = true;
           if (settled) return;
-          // Simulate fill probability
-          if (Math.random() < 0.82) {
-            // If preferRewarded, sometimes grant reward
-            if (preferRewarded && Math.random() < 0.55) {
-              settled = true;
-              adStatusEl.textContent = 'Anuncio rewarded completado (simulado)';
-              resolve({ shown: true, rewarded: true });
-            } else {
-              settled = true;
-              adStatusEl.textContent = 'Interstitial mostrado (simulado)';
-              resolve({ shown: true, rewarded: false });
-            }
-          } else {
-            settled = true;
-            adStatusEl.textContent = 'No hay anuncio disponible (simulado)';
-            reject(new Error('no-fill'));
-          }
-        }, loadTime);
+          settled = true;
+          // We cannot detect rewarded completion reliably for auto formats; resolve as shown.
+          adStatusEl.textContent = 'Anuncio cargado';
+          resolve({ shown: true, rewarded: false });
+        };
+        s.onerror = (e) => {
+          if (settled) return;
+          settled = true;
+          adStatusEl.textContent = 'Error cargando anuncio';
+          reject(new Error('ad-load-error'));
+        };
+        document.body.appendChild(s);
 
-        // Safety timeout: if SDK doesn't respond, reject after timeoutMs
+        // Safety timeout
         setTimeout(() => {
           if (settled) return;
           settled = true;
-          clearTimeout(timer);
-          adStatusEl.textContent = 'Tiempo de anuncio agotado (simulado)';
+          adStatusEl.textContent = 'Tiempo de anuncio agotado';
           reject(new Error('timeout'));
         }, timeoutMs);
       });
     }
 
-    /* ---------- IMPORTANT: How to replace with a real SDK ----------
-      1) Register with your ad provider (AdSense H5, Ad Manager H5, AdinPlay, etc.) and create a placement/unit.
-      2) Add the provider's script tag to <head> as they instruct.
-      3) Replace showAdOnGameOver with the provider's showInterstitial/showRewarded call, returning a Promise.
-         Example conceptual pattern:
-           function showAdOnGameOver(){ 
-             return new Promise((resolve,reject)=>{
-               provider.showRewarded({placement:'XXX'}, {
-                 onComplete: ()=> resolve({shown:true, rewarded:true}),
-                 onClose: ()=> resolve({shown:true, rewarded:false}),
-                 onError: (e)=> reject(e),
-                 onNoFill: ()=> reject(new Error('no-fill'))
-               });
-             });
-           }
-      4) Test in provider's test mode before going live.
-    ----------------------------------------------------------------- */
+    /* ---------- IMPORTANT ----------
+      - Si Adsterra te proporciona un snippet con callbacks o una API para rewarded/interstitial,
+        reemplaza la lógica anterior por la llamada que te indiquen y resuelve la promesa según sus callbacks.
+      - El código actual inyecta el script solo en Game Over para que los anuncios aparezcan únicamente en ese momento.
+    --------------------------------- */
 
     // Drawing
     function drawAll(){
@@ -1160,6 +1148,3 @@
   </script>
 </body>
 </html>
-
-
-
